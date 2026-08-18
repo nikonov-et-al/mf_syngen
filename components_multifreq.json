@@ -1,0 +1,31 @@
+{
+  "expected_source": "4C39.25",
+  "absolute_positions": true,
+  "if_indices": [0, 1, 2, 3],
+  "components": [
+    {
+      "name": "core",
+      "x_mas": 0.0,
+      "y_mas": 0.0,
+      "sm_jy": 1.5,
+      "nu_m_ghz": 40.0,
+      "alpha_thin": -0.5
+    },
+    {
+      "name": "jet1",
+      "x_mas": 0.8,
+      "y_mas": -0.4,
+      "sm_jy": 0.44,
+      "nu_m_ghz": 15.0,
+      "alpha_thin": -1.4
+    }
+  ],
+  "core_shift": {
+    "component": "core",
+    "low_frequency_ghz": 22.1279375,
+    "reference_frequency_ghz": 42.8279375,
+    "dx_mas": 0.0894427191,
+    "dy_mas": -0.0447213595,
+    "k_r": 1.0
+  }
+}

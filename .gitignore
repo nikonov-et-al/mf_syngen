@@ -1,0 +1,4 @@
+.agents/
+data/*
+!data/.gitkeep
+output/*
