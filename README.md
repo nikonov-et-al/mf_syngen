@@ -43,6 +43,22 @@ shifted core; it defaults to `true`.
 Observation frequencies always come from `obs.rf` in the input UVFITS files.
 The configured spectrum and core shift are evaluated at those frequencies.
 
+### Fixed core subcomponents
+
+To model a physical multi-frequency core, set `"subcomponents": true` inside
+the `core_shift` object. The generator then materializes one fixed core point
+for each unique observing frequency. Every point emits at every frequency;
+the point associated with a band has its turnover at that band's frequency,
+so the peak can move between fixed subcomponents while all components retain
+consistent positions. The generated points have equal turnover peaks, with a
+single shared fractional-least-squares scale preserving the original core
+flux as closely as possible across bands. Their homogeneous-sphere spectrum
+uses the optically thick asymptote `alpha_thick = +2.5`.
+
+The flag is opt-in: omitted or `false` keeps the existing single,
+frequency-shifted core behavior. A ready-to-run five-component example is
+provided in `components_multifreq_5comp_subcomponents.json`.
+
 ## Ground-truth options
 
 `ground_truth.py` deliberately uses short option names:
@@ -141,3 +157,16 @@ options for compatibility:
 
 Run `python syngen_pipeline.py --help` or `python ground_truth.py -h` for the
 authoritative command-line help.
+
+## License and citation
+
+Copyright (c) 2026 Aleksei S. Nikonov. Released under the [MIT License](LICENSE).
+You may use, modify, and redistribute this software, including commercially.
+Copies or substantial portions of the software must retain the copyright and
+license notice.
+
+If you use this software in research, please cite Aleksei S. Nikonov,
+*Multi-frequency synthetic data generator*, and include the repository URL and
+the commit or version used.
+Research citation is requested; the MIT License requires preservation of the
+copyright and license notice, not a citation in publications.

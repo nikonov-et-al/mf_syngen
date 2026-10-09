@@ -22,6 +22,7 @@ from .model import (
     build_model,
     component_position_mas,
     evaluate_component_fluxes,
+    materialize_core_subcomponents,
 )
 
 
@@ -285,7 +286,14 @@ def run_ground_truth(
 
     unique_frequency_pairs(record.frequency_hz for record in records)
     records.sort(key=lambda record: record.frequency_hz)
-    positions = _all_component_positions(config, (record.frequency_hz for record in records))
+    components = materialize_core_subcomponents(
+        config.components,
+        config.core_shift,
+        (record.frequency_hz for record in records),
+    )
+    positions = _all_component_positions(
+        config, (record.frequency_hz for record in records), components
+    )
     grid_beams = [record.beam for record in records]
     if spectral_beam is not None:
         grid_beams.append(spectral_beam)
@@ -294,11 +302,12 @@ def run_ground_truth(
     selected_out_dir = resolve_output_dir(out_dir)
     outputs: list[Path] = []
     for record in records:
-        fluxes = evaluate_component_fluxes(record.frequency_hz, config.components)
+        fluxes = evaluate_component_fluxes(record.frequency_hz, components)
         coordinate_offsets = _point_pixel_boundary_offsets(
             config,
             record.frequency_hz,
             fov_rad / selected_npix,
+            components,
         )
         model = build_model(
             record.observation,
@@ -397,8 +406,11 @@ def _validate_run_options(
 
 
 def _all_component_positions(
-    config: PipelineConfig, frequencies_hz: Iterable[float]
+    config: PipelineConfig,
+    frequencies_hz: Iterable[float],
+    components=None,
 ) -> list[tuple[float, float]]:
+    components = config.components if components is None else components
     return [
         component_position_mas(
             component,
@@ -407,7 +419,7 @@ def _all_component_positions(
             config.absolute_positions,
         )
         for frequency_hz in frequencies_hz
-        for component in config.components
+        for component in components
     ]
 
 
@@ -415,6 +427,7 @@ def _point_pixel_boundary_offsets(
     config: PipelineConfig,
     frequency_hz: float,
     pixel_size_rad: float,
+    components=None,
 ) -> dict[str, tuple[float, float]]:
     """Nudge point sources off strict ehtim pixel-cell boundaries."""
     if pixel_size_rad <= 0.0 or not math.isfinite(pixel_size_rad):
@@ -422,7 +435,8 @@ def _point_pixel_boundary_offsets(
 
     nudge_rad = pixel_size_rad * POINT_BOUNDARY_NUDGE_PIXELS
     offsets: dict[str, tuple[float, float]] = {}
-    for component in config.components:
+    components = config.components if components is None else components
+    for component in components:
         x_mas, y_mas = component_position_mas(
             component,
             frequency_hz,

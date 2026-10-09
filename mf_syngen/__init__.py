@@ -19,6 +19,7 @@ from .model import (
     core_shift_offset_mas,
     evaluate_component_fluxes,
     homogeneous_sphere_flux_jy,
+    materialize_core_subcomponents,
     tau_m_from_alpha,
 )
 from .synthetic import enforce_source_policy, process_file, run_pipeline
@@ -48,6 +49,7 @@ __all__ = [
     "enforce_source_policy",
     "evaluate_component_fluxes",
     "homogeneous_sphere_flux_jy",
+    "materialize_core_subcomponents",
     "load_config",
     "load_ehtim_modules",
     "normalize_source_name",

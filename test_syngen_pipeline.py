@@ -7,7 +7,11 @@ from unittest.mock import patch
 from syngen_pipeline import (
     component_position_mas,
     core_shift_offset_mas,
+    evaluate_component_fluxes,
+    homogeneous_sphere_flux_jy,
     load_config,
+    materialize_core_subcomponents,
+    OPTICALLY_THICK_INDEX,
     parse_args,
     resolve_output_dir,
 )
@@ -141,6 +145,82 @@ class CoreShiftTests(unittest.TestCase):
         payload["core_shift"]["low_frequency_ghz"] = 42.8279375
         with self.assertRaisesRegex(ValueError, "must be different"):
             self.load(payload)
+
+    def test_subcomponents_default_false_and_must_be_boolean(self):
+        self.assertFalse(self.load().core_shift.subcomponents)
+        payload = json.loads(json.dumps(CONFIG))
+        payload["core_shift"]["subcomponents"] = "true"
+        with self.assertRaisesRegex(ValueError, "subcomponents.*boolean"):
+            self.load(payload)
+
+    def test_subcomponents_are_fixed_one_per_frequency(self):
+        payload = json.loads(json.dumps(CONFIG))
+        payload["core_shift"]["subcomponents"] = True
+        config = self.load(payload)
+        frequencies = [22.1279375e9, 42.8279375e9]
+        components = materialize_core_subcomponents(config.components, config.core_shift, frequencies)
+        cores = [component for component in components if component.core_frequency_ghz is not None]
+        self.assertEqual([component.name for component in cores], [
+            "core_22.127937500GHz", "core_42.827937500GHz"
+        ])
+        self.assertAlmostEqual(
+            component_position_mas(cores[0], frequencies[0], config.core_shift)[0],
+            0.2894427191,
+        )
+        self.assertAlmostEqual(cores[0].x_mas, 0.2894427191)
+        self.assertAlmostEqual(cores[0].y_mas, 0.0552786405)
+        self.assertEqual(
+            component_position_mas(cores[1], frequencies[1], config.core_shift), (0.2, 0.1)
+        )
+        self.assertNotEqual(
+            component_position_mas(cores[0], frequencies[1], config.core_shift),
+            component_position_mas(cores[1], frequencies[1], config.core_shift),
+        )
+
+    def test_subcomponent_normalization_matches_legacy_core_best_fit(self):
+        payload = json.loads(json.dumps(CONFIG))
+        payload["core_shift"]["subcomponents"] = True
+        config = self.load(payload)
+        frequencies = [22.1279375e9, 42.8279375e9]
+        core = config.components[0]
+        generated = [component for component in materialize_core_subcomponents(
+            config.components, config.core_shift, frequencies
+        ) if component.core_frequency_ghz is not None]
+        targets = [evaluate_component_fluxes(freq, [core])[0][1] for freq in frequencies]
+        modeled = [sum(flux for _, flux in evaluate_component_fluxes(freq, generated))
+                   for freq in frequencies]
+        ratios = [modeled[idx] / generated[0].sm_jy / targets[idx] for idx in range(2)]
+        expected_scale = sum(ratios) / sum(value * value for value in ratios)
+        self.assertAlmostEqual(generated[0].sm_jy, expected_scale, places=12)
+        # Every generated sphere has the requested optically-thick asymptote.
+        self.assertAlmostEqual(
+            homogeneous_sphere_flux_jy(1e6, 1.0, generated[0].nu_m_ghz * 1e9, generated[0].alpha_thin)
+            / homogeneous_sphere_flux_jy(2e6, 1.0, generated[0].nu_m_ghz * 1e9, generated[0].alpha_thin),
+            2 ** -OPTICALLY_THICK_INDEX,
+            places=3,
+        )
+
+    def test_subcomponents_emit_at_all_bands_and_swap_peak(self):
+        payload = json.loads(json.dumps(CONFIG))
+        payload["core_shift"]["subcomponents"] = True
+        config = self.load(payload)
+        frequencies = [15.0e9, 22.1279375e9, 42.8279375e9]
+        generated = [component for component in materialize_core_subcomponents(
+            config.components, config.core_shift, frequencies
+        ) if component.core_frequency_ghz is not None]
+        self.assertEqual(len(generated), 3)
+        for frequency, associated in zip(frequencies, generated):
+            fluxes = dict(evaluate_component_fluxes(frequency, generated))
+            self.assertTrue(all(flux > 0.0 for flux in fluxes.values()))
+            self.assertEqual(max(fluxes.values()), fluxes[associated])
+
+    def test_subcomponent_rejects_nonfinite_frequency(self):
+        payload = json.loads(json.dumps(CONFIG))
+        payload["core_shift"]["subcomponents"] = True
+        config = self.load(payload)
+        for frequency in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaisesRegex(ValueError, "frequencies must be positive"):
+                materialize_core_subcomponents(config.components, config.core_shift, [frequency])
 
 
 class OutputDirectoryTests(unittest.TestCase):

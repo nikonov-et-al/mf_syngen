@@ -18,6 +18,8 @@ class Component:
     sm_jy: float
     nu_m_ghz: float
     alpha_thin: float
+    # Set only for generated fixed core subcomponents.
+    core_frequency_ghz: float | None = None
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class CoreShift:
     dx_mas: float
     dy_mas: float
     k_r: float
+    subcomponents: bool = False
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,48 @@ def evaluate_component_fluxes(
         )
         for component in components
     ]
+
+
+def materialize_core_subcomponents(
+    components: Iterable[Component],
+    core_shift: CoreShift | None,
+    frequencies_hz: Iterable[float],
+) -> list[Component]:
+    """Expand one logical core into fixed, one-per-band core components."""
+    source = list(components)
+    if core_shift is None or not core_shift.subcomponents:
+        return source
+    core_matches = [c for c in source if c.name == core_shift.component]
+    if len(core_matches) != 1:
+        raise ValueError(f"Core-shift component {core_shift.component!r} must match exactly one component.")
+    core = core_matches[0]
+    freqs = sorted({float(freq) for freq in frequencies_hz})
+    if not freqs or any(not math.isfinite(freq) or freq <= 0.0 for freq in freqs):
+        raise ValueError("Subcomponent frequencies must be positive.")
+    targets = [homogeneous_sphere_flux_jy(freq, core.sm_jy, core.nu_m_ghz * 1e9, core.alpha_thin)
+               for freq in freqs]
+    templates = []
+    for turnover_hz in freqs:
+        templates.append([
+            homogeneous_sphere_flux_jy(freq, 1.0, turnover_hz, core.alpha_thin)
+            for freq in freqs
+        ])
+    sums = [sum(row[idx] for row in templates) for idx in range(len(freqs))]
+    ratios = [total / target for total, target in zip(sums, targets)]
+    scale = sum(ratios) / sum(value * value for value in ratios)
+    generated = [
+        Component(
+            name=f"{core.name}_{freq / 1e9:.9f}GHz",
+            x_mas=core_shift.reference_x_mas + core_shift_offset_mas(freq, core_shift)[0],
+            y_mas=core_shift.reference_y_mas + core_shift_offset_mas(freq, core_shift)[1],
+            sm_jy=scale,
+            nu_m_ghz=freq / 1e9,
+            alpha_thin=core.alpha_thin,
+            core_frequency_ghz=freq / 1e9,
+        )
+        for freq in freqs
+    ]
+    return [component for component in source if component.name != core_shift.component] + generated
 
 
 def build_model(

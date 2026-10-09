@@ -58,6 +58,7 @@ def load_config(config_path: Path) -> PipelineConfig:
             dx_mas = float(core_shift_payload["dx_mas"])
             dy_mas = float(core_shift_payload["dy_mas"])
             k_r = float(core_shift_payload.get("k_r", 1.0))
+            subcomponents = core_shift_payload.get("subcomponents", False)
         except KeyError as exc:
             raise ValueError(
                 f"Config field 'core_shift' is missing required field {exc.args[0]!r}."
@@ -68,6 +69,8 @@ def load_config(config_path: Path) -> PipelineConfig:
             raise ValueError("Core-shift low and reference frequencies must be different.")
         if k_r <= 0.0:
             raise ValueError("Core-shift k_r must be positive.")
+        if not isinstance(subcomponents, bool):
+            raise ValueError("Config field 'core_shift.subcomponents' must be a boolean.")
 
         matches = [component for component in components if component.name == component_name]
         if len(matches) != 1:
@@ -84,6 +87,7 @@ def load_config(config_path: Path) -> PipelineConfig:
             dx_mas=dx_mas,
             dy_mas=dy_mas,
             k_r=k_r,
+            subcomponents=subcomponents,
         )
 
     if not absolute_positions and core_shift is None:

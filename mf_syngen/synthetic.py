@@ -11,6 +11,7 @@ from .model import (
     component_position_mas,
     core_shift_offset_mas,
     evaluate_component_fluxes,
+    materialize_core_subcomponents,
 )
 
 
@@ -46,9 +47,13 @@ def process_file(
     seed: int,
     expected_source: str | None,
     source_check: str,
+    observation=None,
 ) -> Path:
-    eh, _ = load_ehtim_modules()
-    obs_real = eh.obsdata.load_uvfits(str(input_path), IF=if_indices)
+    if observation is None:
+        eh, _ = load_ehtim_modules()
+        obs_real = eh.obsdata.load_uvfits(str(input_path), IF=if_indices)
+    else:
+        obs_real = observation
     observed_source = normalize_source_name(obs_real.source)
     observed_freq_ghz = float(obs_real.rf) / 1e9
 
@@ -108,6 +113,16 @@ def run_pipeline(
 
     out_dir = resolve_output_dir(out_dir, overwrite)
     if_indices = if_indices_override if if_indices_override is not None else config.if_indices
+    eh, _ = load_ehtim_modules()
+    observations = [
+        eh.obsdata.load_uvfits(str(input_path), IF=if_indices)
+        for input_path in input_files
+    ]
+    components = materialize_core_subcomponents(
+        config.components,
+        config.core_shift,
+        [float(observation.rf) for observation in observations],
+    )
     print(f"Discovered {len(input_files)} input file(s) in {uvf_dir}")
     print(f"Output directory: {out_dir}")
     print(f"Using IF indices: {if_indices}")
@@ -120,15 +135,16 @@ def run_pipeline(
             input_path=input_path,
             out_dir=out_dir,
             if_indices=if_indices,
-            components=config.components,
+            components=components,
             core_shift=config.core_shift,
             absolute_positions=config.absolute_positions,
             add_th_noise=add_th_noise,
             seed=seed,
             expected_source=config.expected_source,
             source_check=source_check,
+            observation=observation,
         )
-        for input_path in input_files
+        for input_path, observation in zip(input_files, observations)
     ]
     print(f"Generated {len(outputs)} synthetic file(s).")
     return outputs

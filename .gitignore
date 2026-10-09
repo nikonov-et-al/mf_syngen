@@ -1,4 +1,27 @@
 .agents/
-data/*
+
+# Private observations and generated products stay local.
+data/**
 !data/.gitkeep
-output/*
+output/**
+
+# Python runtime cache.
+__pycache__/
+*.py[cod]
+
+# Local secrets and credentials.
+.env
+.env.*
+!.env.example
+.aws/
+.ssh/
+credentials.json
+*credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local Python environments.
+.venv/
+venv/
